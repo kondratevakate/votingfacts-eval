@@ -2,7 +2,7 @@
 
 Frozen 2026-11-10, before any per-claim harm result was read. Changes after this point go in the amendment log at the end, with date and reason. Earlier results are never overwritten.
 
-**Disclosure:** run E1 (below) was started at about 18:50 on 2026-11-10, a few minutes before this file was frozen. No E1 output had been inspected when the file was committed; only its progress counter was checked. The starter baseline E0 had been read (`results/baseline/`), and that is why H1 compares against it.
+**Disclosure:** run E1 (below) was started at 18:38:49 (+04:00) on 2026-11-10, 5 minutes before this file was first committed (228e27e, 18:43:45). No E1 output had been inspected at that point; only its progress counter was checked. A 2-item smoke test of the harm scorer (gpt-5.4, Brazil compulsory voting and election date, both without severe harm) was seen at 18:38. This disclosure was corrected from an earlier estimated start time. The starter baseline E0 had been read (`results/baseline/`), and that is why H1 compares against it.
 
 ## Target harm
 
