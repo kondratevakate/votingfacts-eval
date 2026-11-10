@@ -183,8 +183,12 @@ def build_inputs() -> list[dict]:
 def parse_judge(raw: str, claims: list[dict]) -> tuple[dict[str, str], dict]:
     """Parse the judge's JSON into {claim_id: status}. Raises on any gap so it can't pass silently."""
     v = json.loads(raw)
+    if not isinstance(v, dict) or not isinstance(v.get("claims"), list):
+        raise ValueError(f"judge output has no 'claims' list: {raw[:200]!r}")
     statuses = {}
     for c in v["claims"]:
+        if not isinstance(c, dict) or "claim_id" not in c or "status" not in c:
+            raise ValueError(f"judge claim entry is not an object with claim_id/status: {c!r:.200}")
         if c["claim_id"] in statuses:
             raise ValueError(f"judge returned claim {c['claim_id']} twice")
         statuses[c["claim_id"]] = c["status"]

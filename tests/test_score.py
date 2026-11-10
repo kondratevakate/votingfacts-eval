@@ -34,6 +34,13 @@ def test_parse_judge_duplicate_claim_raises():
         score.parse_judge(raw, CLAIMS)
 
 
+@pytest.mark.parametrize("raw", ['{"claims": ["a: full", "b: not_addressed"]}', '[]', '{"claims": "none"}'])
+def test_parse_judge_malformed_entries_raise_clear_error(raw):
+    # E2 regression: a judge returned claim entries as strings -> was an opaque TypeError
+    with pytest.raises(ValueError, match="claim"):
+        score.parse_judge(raw, CLAIMS)
+
+
 def test_prompt_hides_claim_scores():
     item = {"prompt": "q?", "answer_text": "ans", "citations": [], "reference_source": "src"}
     p = score.judge_prompt(item, CLAIMS)
