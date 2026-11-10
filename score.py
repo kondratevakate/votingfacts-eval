@@ -25,10 +25,15 @@ Run:
   MODEL=gpt-4o-mini uv run score.py --limit 3   # smoke test on the first 3 answers
 """
 import argparse
+import datetime as dt
+import hashlib
 import json
 import os
+import platform
+import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import harm
 
@@ -38,6 +43,40 @@ ANSWERS = HERE / "results" / "answers.jsonl"
 RUBRIC = HERE / "data" / "rubric.jsonl"
 SEVERITY = HERE / "data" / "severity.json"
 OUT = HERE / "results" / "scores.json"
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def git(*args: str) -> str:
+    try:
+        return subprocess.run(["git", *args], cwd=HERE, capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as e:
+        return f"unavailable ({type(e).__name__})"
+
+
+def run_metadata(name: str, model: str, base_url: str | None, severity: dict) -> dict:
+    """Everything needed to say exactly what produced a results file (no secrets, no keys)."""
+    try:
+        import openai
+        openai_version = openai.__version__
+    except ImportError:
+        openai_version = "not installed"
+    return {
+        "name": name,
+        "scorer": "harm",
+        "started_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "git_commit": git("rev-parse", "HEAD"),
+        "git_dirty": bool(git("status", "--porcelain", "--", "score.py", "harm.py", "data")),
+        "judge_model": model,
+        "endpoint_host": urlparse(base_url).netloc if base_url else "api.openai.com",
+        "temperature": 0,
+        "severity_version": severity["version"],
+        "sha256": {p.name: sha256(p) for p in (RUBRIC, SEVERITY, ANSWERS, QUESTIONS)},
+        "python": platform.python_version(),
+        "openai": openai_version,
+    }
 
 
 def judge_schema(claim_ids: list[str]) -> dict:
@@ -170,12 +209,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="cap items (0 = all)")
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--run-name", default="adhoc", help="experiment id, e.g. E1 (see docs/preregistration.md)")
     args = ap.parse_args()
 
     severity = harm.load_severity(SEVERITY)
     qids = {q["qid"] for q in harm.load_jsonl(QUESTIONS)}
     rubric = harm.validate_rubric(harm.load_jsonl(RUBRIC), qids)
     client, model = make_client()
+    run = run_metadata(args.run_name, model, getattr(client, "base_url", None) and str(client.base_url), severity)
     inputs = build_inputs()
     if args.limit:
         inputs = inputs[: args.limit]
@@ -199,7 +240,9 @@ def main():
         tag = row["status"] if row["status"] != "ok" else f"F1={row['f1']:.2f} harms={len(row['harms'])}"
         print(f"[{i}/{len(inputs)}] {item['model']} {item['qid']} -> {tag}", file=sys.stderr)
 
+    run["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     out = {
+        "run": run,
         "judge_model": model,
         "severity_version": severity["version"],
         "summary": harm.aggregate(rows),
