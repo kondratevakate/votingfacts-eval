@@ -19,20 +19,24 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import harm
+
 HERE = Path(__file__).parent
 QUESTIONS = HERE / "data" / "questions.jsonl"
 GROUND_TRUTH = HERE / "data" / "ground-truth.csv"
 ANSWERS = HERE / "results" / "answers.jsonl"
+RUBRIC = HERE / "data" / "rubric.jsonl"
+SEVERITY = HERE / "data" / "severity.json"
 
 
 def load_jsonl(p: Path) -> list[dict]:
-    return [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
 def main():
     questions = load_jsonl(QUESTIONS)
     answers = load_jsonl(ANSWERS)
-    with GROUND_TRUTH.open() as fh:
+    with GROUND_TRUTH.open(encoding="utf-8", newline="") as fh:
         gt = list(csv.DictReader(fh))
 
     qids = {q["qid"] for q in questions}
@@ -55,7 +59,15 @@ def main():
     print(f"cached answers: {len(answers)} ({len(qids)} questions x {len(models)} models)")
     print("by risk tier  :", dict(sorted(Counter(q['risk_tier'] for q in questions).items())))
     print("by election   :", dict(sorted(Counter(q['election_id'] for q in questions).items())))
-    print("\ndataset OK -> run:  uv run score.py")
+    severity = harm.load_severity(SEVERITY)
+    rubric = harm.validate_rubric(load_jsonl(RUBRIC), qids)
+    scores = Counter(harm.kind(c["score"]) for cs in rubric.values() for c in cs)
+    provisional = sum(c.get("status") == "provisional" for cs in rubric.values() for c in cs)
+    print(f"rubric claims : {sum(scores.values())} ({dict(sorted(scores.items()))}); "
+          f"{provisional} still provisional (author-rated, not expert-rated)")
+    print(f"severity      : {severity['version']} weights {severity['weights']}")
+
+    print("\ndataset OK -> run:  MODEL=<judge> uv run score.py")
 
 
 if __name__ == "__main__":
