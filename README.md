@@ -73,3 +73,33 @@ python -m pytest -q tests
 The judge is model-agnostic. With `OPENAI_API_KEY` it hits OpenAI; with `OPENROUTER_API_KEY` it uses OpenRouter; set `OPENAI_BASE_URL` to point at any other OpenAI-compatible server. `MODEL` picks the judge model. Use `--limit 3` for a quick smoke test.
 
 `score.py` writes `results/scores.json` with a per-model `summary`, a flat `harms` list, an `errors` list, and the full per-item rows (claim statuses, evidence, harms). It exits non-zero if any judge call failed.
+
+## Experiments and reproducibility
+
+The research question, hypotheses H1-H4, their statistics and pass rules were frozen in `docs/preregistration.md` before any per-claim result was read. That file also has the amendment log. Every results file carries a `run` block with the git commit, the SHA-256 of the rubric, severity config, answers and questions, the judge model and the endpoint host (never a key). `track.py` logs each run to the trackio project `votingfacts-eval`, and `analyze.py` computes H1-H4 exactly as frozen.
+
+| Run | Scorer | Judge | Output |
+|---|---|---|---|
+| E0 | starter, unmodified | `deepseek/deepseek-v4-flash-0731` | `results/baseline/` |
+| E1 | per-claim harm-v1 (primary) | `deepseek/deepseek-v4-flash-0731` | `results/harm/E1__*` |
+| E2, E3 | per-claim harm-v1, repeats | `deepseek/deepseek-v4-flash-0731` | `results/harm/E2__*`, `E3__*` |
+| E4 | per-claim harm-v1, second judge | `google/gemini-3.5-flash` | `results/harm/E4__*` |
+
+The judge is reliable on this data: kappa 0.994 across three repeats, and 0.958 against the second judge. Neither model gave an answer with a real severe harm. The single flagged case comes from an ambiguously worded claim, and the amendment log explains it. Answers the starter graded `correct` still leave out must-state facts in 6 of 22 cases. Full numbers are in `results/analysis/hypotheses.json`.
+
+**Scope of these findings.** 15 ordinary English questions, two models, one collection date, and a rubric that is not yet expert rated. This is too little to show that chatbots are safe for voters, and the results should not be read that way.
+
+## Handling of false claims in the data
+
+`data/rubric.jsonl` contains false election statements on purpose: every claim scored 1-3 is wrong (for example "a postmark by election day is enough", or "non-citizens can vote in the Finnish parliamentary election"). They are there so the judge can detect them in answers. Do not use that file, or the `failure_trap` fields, as a source of election facts. The Finnish election covered here (18 April 2027) has not taken place yet. The verified facts are in `data/ground-truth.csv`, each with its official source.
+
+## AI use
+
+This iteration was built with Claude Opus 5.5 (Anthropic, model id `claude-opus-5-5`) running in the Claude Code desktop app. The assistant wrote the code (`harm.py`, `analyze.py`, `track.py`, the reworked `score.py` and `build.py`, the tests), drafted the 61 rubric claims and their scores, the preregistration and this README, made the Swiss cheese diagram, and ran the experiments. I set the direction: severe harm as the target, freezing the research question and hypotheses before running, DeepSeek V4 Flash as the judge, a per-claim score in place of the holistic verdict. The assistant proposed the hypotheses, the second judge and the NOHARM-style scale, and I accepted them. Literature for the theory of harm was found with the Consensus search engine and web search, and each paper cited was checked against its arXiv or publisher page.
+
+Models used as instruments in the evaluation:
+
+- Judges: `deepseek/deepseek-v4-flash-0731` (E0-E3) and `google/gemini-3.5-flash` (E4), through the Nous Research inference API, temperature 0.
+- Systems under test: `gpt-5.4-2026-03-05` and `gpt-5-mini-2025-08-07` with web search. Their answers came cached with the starter and were not re-collected.
+
+The rubric claims and scores were drafted by the assistant from the verified ground truth and have not yet been rated by election experts. They are marked `provisional` in the file.
