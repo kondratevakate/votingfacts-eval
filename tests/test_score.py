@@ -45,6 +45,15 @@ def test_schema_restricts_claim_ids():
     assert s["properties"]["claims"]["items"]["properties"]["claim_id"]["enum"] == ["a", "b"]
 
 
+@pytest.mark.parametrize("url,host", [
+    ("https://user:secret@example.com:8443/v1?key=abc", "example.com:8443"),
+    ("https://inference-api.nousresearch.com/v1", "inference-api.nousresearch.com"),
+    (None, "api.openai.com"),
+])
+def test_endpoint_host_never_records_credentials(url, host):
+    assert score.endpoint_host(url) == host
+
+
 def test_build_inputs_reads_all_cached_answers_as_utf8():
     rows = score.build_inputs()
     assert len(rows) == 30

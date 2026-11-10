@@ -56,6 +56,14 @@ def git(*args: str) -> str:
         return f"unavailable ({type(e).__name__})"
 
 
+def endpoint_host(base_url: str | None) -> str:
+    """Host[:port] only; never userinfo, path or query (a URL may embed credentials)."""
+    if not base_url:
+        return "api.openai.com"
+    u = urlparse(base_url)
+    return f"{u.hostname}:{u.port}" if u.port else (u.hostname or "unknown")
+
+
 def run_metadata(name: str, model: str, base_url: str | None, severity: dict) -> dict:
     """Everything needed to say exactly what produced a results file (no secrets, no keys)."""
     try:
@@ -70,7 +78,7 @@ def run_metadata(name: str, model: str, base_url: str | None, severity: dict) ->
         "git_commit": git("rev-parse", "HEAD"),
         "git_dirty": bool(git("status", "--porcelain", "--", "score.py", "harm.py", "data")),
         "judge_model": model,
-        "endpoint_host": urlparse(base_url).netloc if base_url else "api.openai.com",
+        "endpoint_host": endpoint_host(base_url),
         "temperature": 0,
         "severity_version": severity["version"],
         "sha256": {p.name: sha256(p) for p in (RUBRIC, SEVERITY, ANSWERS, QUESTIONS)},
